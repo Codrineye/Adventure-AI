@@ -1,4 +1,4 @@
-#package Adventure v3.3.7
+#package Adventure v3.3.8
 
 ; key assignment macros
 #start r
@@ -65,7 +65,7 @@
 ; Convert a length-4 stringified vector to vector form.
 ; This evaluates str twice, so that should be a small expression.
 ; This *will* work with negative values, if they're small enough.
-#strToVec(str) vec({strToCoord({str}, 0)}, {strToCoord({str}, 2)})
+#strToVec(str) vec({strToCoord({str},0)}, {strToCoord({str},2)})
 
 ; Macros for working with BFS queues. The queue is structured as a
 ; length-4 stringified position followed by a length-1 direction.
