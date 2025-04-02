@@ -1,7 +1,7 @@
 :import adventure_lib
 :name {package}:init
 
-:budget_cap 201
+:budget_cap max
 ; minimum budget cap so that init can quit in 1 frame
 
 :const string hide_block "adv---Stop hiding---"
@@ -151,6 +151,7 @@ goto(if(\
 
 #needs_bombs adventure.bombs() < 99 && difficulty >= 80.0 && {can_leech}
 #needs_health adventure.playerHealth() < 99 && {can_leech}
+#needs_armor adventure.manaArmor() < adventure.playerArmor() && {can_cast}
 #needs_mana adventure.mana() < 99 && {has_reaver} && {can_cast}
 #needs_keys adventure.keys() <= 10
 
@@ -167,6 +168,8 @@ goto(if(\
 ; calculate how much damage an elite will actually deal to us
 #elite_trueDMG {elite_health} * ({elite_dmg} - adventure.playerArmor())
 
+#player_health adventure.playerHealth() + adventure.manaArmor()
+
 next:
 ; partity is in charge of making sure we never exit farm keys until
 ; we're back in the room we started in
@@ -175,6 +178,11 @@ adventure.move({nextDir(farm_dir)})
 
 start:
 difficulty = {cur_difficulty(0.0)}
+
+mana_loop:
+adventure.useSpell("manaArmor")
+gotoif(mana_loop, {needs_armor} && adventure.mana() >= 5)
+
 needs_something = {survivable(difficulty)} && ({any_needs})
 ; "XU   L   R   D"   = "X{dir_spaced(3)}"
 ; " 918 09  189 09"
@@ -187,10 +195,10 @@ skipped = contains("ULRD", farm_dir) && (\
   (adventure.countEntities("Elite") > 0) != \
   (needs_something && {needs_bombs}) && (\
     adventure.countEntities("Elite") > 0 || \
-    adventure.playerHealth() > 100 - d2i({num_enemies} * 1.8)\
+    {player_health} > 100 - d2i({num_enemies} * 1.8)\
   ) || (\
     adventure.countEntities("Elite") > 0 && \
-    adventure.playerHealth() <= {elite_trueDMG}\
+    {player_health} <= {elite_trueDMG}\
   ) || (parity && not(needs_something))\
 )
 
@@ -256,8 +264,8 @@ difficulty = {cur_difficulty(1.0)}
 ; prior progress, and we'd immediately add another 1 anyway.
 leon.adventure.maxDifficulty = if(\
   difficulty > leon.adventure.maxDifficulty \
-    && {count.entities(Chest)} == 0,\
-  leon.adventure.maxDifficulty + 2.0,\
+  && {count.entities(Chest)} == 0,\
+  difficulty + 1.0,\
   leon.adventure.maxDifficulty\
 )
 
@@ -330,6 +338,7 @@ executesync(if(\
 ))
 
 adventure.move({nextDir(dir)})
+waitframe()
 
 gotoif(start, isopen("arcade") && {state.get})
 

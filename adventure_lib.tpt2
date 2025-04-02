@@ -1,4 +1,4 @@
-#package Adventure v3.3.8
+#package Adventure v3.3.9
 
 ; key assignment macros
 #start r
@@ -101,9 +101,8 @@
     adventure.hasItem("impaler"), \
     ceil(i2d(adventure.playerAttack()) * 1.1),\
     i2d(adventure.playerAttack())\
-  ) >= round({difficulty} * 0.38 + 1.) + round({difficulty} * 0.08)\
+  ) >= round({difficulty} * 0.38 + 1.0) + round({difficulty} * 0.08)\
 )
-
 
 ; Convert a U/D/R/L direction into a direction vector by using index
 ; and lookup tables. These are arranged so that if the lookup fails

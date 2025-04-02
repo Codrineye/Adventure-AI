@@ -1,7 +1,7 @@
 :import adventure_lib
 :name {package}:movement
 
-:budget_cap 101
+:budget_cap 200
 
 :local bool waitChest
 :local bool cantPhase
@@ -217,7 +217,7 @@ idx = {vecToString(curPos)}
 
 l2start:
 dir = {getField(idx, target)}
-gotoif(loop2, dir != "S")
+goto(if(dir == "S", start, loop2))
 
 #has_hammer adventure.hasItem("hammer")
 
@@ -245,9 +245,6 @@ gotoif(loop2, dir != "S")
     )\
   )\
 )
-
-curPos = adventure.playerPos()
-goto(start)
 
 rock:
 path = {insert(\
