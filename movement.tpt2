@@ -8,6 +8,7 @@
 :local bool path_search
 ; 
 :local int stepCount
+:local int counter
 ; 
 :local string path
 
@@ -92,7 +93,7 @@ lootPositions = if(\
 ; the neighbouring 4 positions and
 ; add all non-wall positions to the queue
 queue = if(\
-  {getField(idx, target)} != {firstElementDir},\
+  {getField(idx, target)} != {firstElementDir} || adventure.playerAttack() <= 0,\
   sub(queue, 6, 99999),\
   sub(queue, 6, 99999) . if(\
     adventure.isWall(curPos + vec(0.0, 1.0)) && cantPhase\
@@ -286,11 +287,14 @@ start_following:
 curPos = adventure.playerPos()
 nextMove = {nextDir(sub(path, 0, 1))}
 waitChest = {nextTile} == "Chest"
+counter = 0
 
 move2:
 waitframe()
 adventure.move(nextMove)
 ; This is a no-op for invalid (0,0) moves
+
+counter += 1
 
 gotoif(\
   if(\
@@ -302,7 +306,8 @@ gotoif(\
       if(\
         waitChest && {nextTile} == ""\
         || x(curPos) != x(adventure.playerPos())\
-        || y(curPos) != y(adventure.playerPos()),\
+        || y(curPos) != y(adventure.playerPos())\
+        || counter >= 15,\
         move,\
         move2\
       )\

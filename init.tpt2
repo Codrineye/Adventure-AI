@@ -136,7 +136,7 @@ leon.adventure.maxDifficulty = if(\
 global.string.set(hide_block, "</size>")
 
 goto(if(\
-  impulse() == "key.{kill}" || \
+  impulse() == "key.{kill}" ||\
   impulse() == "key.{start}" && {state.get}, \
   start, \
   end\
@@ -152,7 +152,7 @@ goto(if(\
 #needs_bombs adventure.bombs() < 99 && difficulty >= 80.0 && {can_leech}
 #needs_health adventure.playerHealth() < 99 && {can_leech}
 #needs_armor adventure.manaArmor() < adventure.playerArmor() && {can_cast}
-#needs_mana adventure.mana() < 99 && {has_reaver} && {can_cast}
+#needs_mana adventure.mana() < 99 && {has_reaver} && {needs_armor}
 #needs_keys adventure.keys() <= 10
 
 #any_needs {needs_bombs} || {needs_health} || {needs_mana} || {needs_keys}
@@ -179,11 +179,15 @@ adventure.move({nextDir(farm_dir)})
 start:
 difficulty = {cur_difficulty(0.0)}
 
+gotoif(skip_mana, {needs_bombs})
 mana_loop:
 adventure.useSpell("manaArmor")
 gotoif(mana_loop, {needs_armor} && adventure.mana() >= 5)
+skip_mana:
 
-needs_something = {survivable(difficulty)} && ({any_needs})
+needs_something = {survivable(difficulty)} && ({any_needs})\
+  && adventure.playerAttack() > 0
+
 ; "XU   L   R   D"   = "X{dir_spaced(3)}"
 ; " 918 09  189 09"
 :const string exit_coord " 918 09  189 09"
@@ -332,7 +336,7 @@ adventure.buyMarketItem(sub(market_data, 5, 99))
 ; 
 
 executesync(if(\
-  isopen("arcade") && {state.get},\
+  adventure.playerAttack() > 0 && {state.get},\
   "{package}:movement",\
   "{package}:xNOOPx"\
 ))
@@ -340,7 +344,7 @@ executesync(if(\
 adventure.move({nextDir(dir)})
 waitframe()
 
-gotoif(start, isopen("arcade") && {state.get})
+gotoif(start, adventure.playerAttack() > 0 && {state.get})
 
 end:
 ; We reach the end 
@@ -351,4 +355,4 @@ end:
 ; If our state == false, we won't change anything,
 ; as we're already shut down but if arcade is closed,
 ; we must ensure that we shut down
-{state.set(isopen("arcade") && {state.get})}
+{state.set(adventure.playerAttack() > 0 && {state.get})}
