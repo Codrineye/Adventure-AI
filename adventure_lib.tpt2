@@ -1,4 +1,4 @@
-#package Adventure v3.4.0
+#package(name) Adventure v3.4.1:{name}
 
 ; key assignment macros
 #start r
@@ -12,11 +12,13 @@
 ; lua macro that makes sure the export code doesn't have
 ; duplicate impulse keys.
 {lua(\
-  local imp = {};\
+  local impulse = {};\
   local keys = "{start}|{reinit}|{up}|{down}|{kill}|";\
   for word in keys:gmatch("[^|]+") do\
-    if imp[word] then error("key. impulses can't have duplicates", 0) end\
-    imp[word] = 1;\
+    if impulse[word] ~= nil then\
+     error("key. impulses can't have duplicates", 0);\
+    end\
+    impulse[word] = 0;\
   end\
 )}
 
@@ -41,14 +43,24 @@
 
 ; The name of the variable that stores "target positions" state.
 ; Doubles as the start of the variable-hiding block.
-:const string target_pos_var "<size=0>adv.target_pos"
+:const string target_pos_var "<size=0>adv$target_pos@"
 #target.getPositions global.string.get(target_pos_var)
 #target.setPos(position) global.string.set(target_pos_var, {position})
 
 ; The state of the script.
-:const string state "leon.adventure.running"
+:const string state "adv$running@"
 #state.get global.bool.get(state)
 #state.set(value) global.bool.set(state, {value})
+
+; The path we follow to move through the room
+:const string path "adv$path@"
+#path.get global.string.get(path)
+#path.set(path) global.string.set(path, {path})
+
+; The maximum difficulty we can achieve
+:const string maxDiff "</size>leon.adventure.maxDifficulty"
+#maxDiff.get global.double.get(maxDiff)
+#maxDiff.set(difficulty) global.double.set(maxDiff, {difficulty})
 
 ; Convert a coordinate into stringified form.
 #coordToString(coord) sub(d2s(200.0 + ({coord})), 1, 2)
@@ -81,12 +93,12 @@
 ; whereas if we add it later it's a separate addition.
 #cur_difficulty(offset) (\
   max(\
-    254. - x(adventure.roomCoords()),\
+    254.0 - x(adventure.roomCoords()),\
     x(adventure.roomCoords())\
   ) + max(\
-    254. - y(adventure.roomCoords()),\
+    254.0 - y(adventure.roomCoords()),\
     y(adventure.roomCoords())\
-  ) + ({offset} - 254.)\
+  ) + ({offset} - 254.0)\
 )
 
 ; Calculate if the given difficulty (i.e. distance) is "survivable",
@@ -96,7 +108,7 @@
 #survivable(difficulty) (\
   {difficulty} < 100.0 || \
   adventure.hasItem("lantern")\
-) && leon.adventure.maxDifficulty >= {difficulty} && (\
+) && {maxDiff.get} >= {difficulty} && (\
   i2d(adventure.playerArmor()) >= ceil({difficulty} * 0.39) || if(\
     adventure.hasItem("impaler"), \
     ceil(i2d(adventure.playerAttack()) * 1.1),\

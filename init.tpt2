@@ -1,16 +1,12 @@
 :import adventure_lib
-:name {package}:init
+:name {package(init)}
 
 :budget_cap max
+; minimum budget cap is 200, but because key.{kill} lets us buy
+; 
 ; minimum budget cap so that init can quit in 1 frame
 
-:const string hide_block "adv---Stop hiding---"
-#hide_blocker global.string.get(hide_block)
-
-:global double leon.adventure.maxDifficulty
-; 
-:local bool square_up
-
+;
 :local bool parity
 :local bool needs_something
 :local bool skipped
@@ -18,13 +14,14 @@
 ; 
 :local double maxDifficultyInit
 :local double difficulty
-:local double inc
-:local double pos
 ; 
+
 ;
 :local string market_data
-:local string farm_dir
+:local string exit_dir
 :local string dir
+;
+:local vector curPos
 
 
 key.{reinit}()
@@ -104,36 +101,42 @@ maxDifficultyInit = 81.0
 
 ; Initialize all our global variables.
 ; 
-; Make sure that maxDifficulty is at least 2.
-; if it's 1 it gets stuck in an endless loop
-; in the starting room for some reason
-leon.adventure.maxDifficulty = if(\
-  leon.adventure.maxDifficulty < 2.0 || impulse() == "key.{reinit}",\
-  max(2.0, maxDifficultyInit),\
-  if(\
-    contains("key.{start}|key.{kill}", impulse()),\
-    leon.adventure.maxDifficulty,\
-    if(\
-      impulse() == "key.{up}", \
-      leon.adventure.maxDifficulty + 1.0,\
-      max(2.0, leon.adventure.maxDifficulty - 1.0)\
-    )\
-  )\
-)
-
-; This variable also begins the variable hiding block with its name.
+; Store our target positions.
+; It starts a hiding block ended when setting maxDiff
 {target.setPos({target.getPositions})}
 
 ; 
 ; Change the state of the script.
-; If we use key.{kill}, our state must be off, otherwise, we
+; If we use key.{kill}, our state must be off, otherwise
 ; try to toggle our state.
 {state.set(\
   impulse() != "key.{kill}" && \
   {state.get} != (impulse() == "key.{start}")\
 )}
 
-global.string.set(hide_block, "</size>")
+; hide the path
+; Overwrite its value if we're shut down
+{path.set(if({state.get}, {path.get}, ""))}
+
+; 
+; Make sure that maxDifficulty is at least 2.
+; if it's 1 it gets stuck in an endless loop
+; in the starting room for some reason
+; 
+; Additionally, end the hiding block started by target_pos_var
+{maxDiff.set(if(\
+  {maxDiff.get} < 2.0 || impulse() == "key.{reinit}",\
+  max(2.0, maxDifficultyInit),\
+  if(\
+    contains("key.{start}|key.{kill}", impulse()),\
+    {maxDiff.get},\
+    if(\
+      impulse() == "key.{up}", \
+      {maxDiff.get} + 1.0,\
+      max(2.0, {maxDiff.get} - 1.0)\
+    )\
+  )\
+))}
 
 goto(if(\
   impulse() == "key.{kill}" ||\
@@ -152,7 +155,7 @@ goto(if(\
 #needs_bombs adventure.bombs() < 99 && difficulty >= 80.0 && {can_leech}
 #needs_health adventure.playerHealth() < 99 && {can_leech}
 #needs_armor adventure.manaArmor() < adventure.playerArmor() && {can_cast}
-#needs_mana adventure.mana() < 99 && {has_reaver} && {needs_armor}
+#needs_mana adventure.mana() < 99 && {has_reaver} && {can_cast}
 #needs_keys adventure.keys() <= 10
 
 #any_needs {needs_bombs} || {needs_health} || {needs_mana} || {needs_keys}
@@ -174,7 +177,9 @@ next:
 ; partity is in charge of making sure we never exit farm keys until
 ; we're back in the room we started in
 parity = not(parity)
-adventure.move({nextDir(farm_dir)})
+
+{path.set(exit_dir)}
+executesync("{package(follow path)}")
 
 start:
 difficulty = {cur_difficulty(0.0)}
@@ -186,16 +191,23 @@ gotoif(mana_loop, {needs_armor} && adventure.mana() >= 5)
 skip_mana:
 
 needs_something = {survivable(difficulty)} && ({any_needs})\
-  && adventure.playerAttack() > 0
+  && adventure.playerHealth() > 0
 
-; "XU   L   R   D"   = "X{dir_spaced(3)}"
-; " 918 09  189 09"
-:const string exit_coord " 918 09  189 09"
+; " U   L   R   D   " = "X{dir_spaced(3)}"
+; " 918 09  189 90  "
+:const string exit_coord " 918 09  189 90  "
 #exit_concat x(adventure.playerPos()) . y(adventure.playerPos())
-farm_dir = sub("X{dir_spaced(3)}", index(exit_coord, {exit_concat}, 0), 1)
+exit_dir = sub("X{dir_spaced(3)}", index(exit_coord, {exit_concat}, 0), 1)
 ; get our exit direction
 
-skipped = contains("ULRD", farm_dir) && (\
+; We are skipped if we have a valid exit direction and:
+; - there are multiple elites while we don't need bombs and
+;   we can't clear the entire room with our hp
+; or
+; - there are more elites in the room and we won't survive killing all of them
+; or
+; - our needs are met but we're not in the same room we started in
+skipped = contains("ULRD", exit_dir) && (\
   (adventure.countEntities("Elite") > 0) != \
   (needs_something && {needs_bombs}) && (\
     adventure.countEntities("Elite") > 0 || \
@@ -241,7 +253,7 @@ goto(if(\
     max({count.entities(Enemy)}, {count.entities(Elite)}) > 0,\
     if({anyEnemies}, attack, killer_wait),\
     if(\
-      contains("ULRD", farm_dir) &&\
+      contains("ULRD", exit_dir) &&\
         (parity || needs_something && ({any_needs})),\
       next,\
       if(impulse() == "key.{kill}", end, main_loop)\
@@ -255,8 +267,8 @@ main_loop:
 ; because it's more efficient that way.
 difficulty = {cur_difficulty(1.0)}
 
-; This line is responsible for maxDifficulty "creeping" upwards. When used
-; properly, it will cause the AI to slowly make spirals that cover
+; This line is responsible for maxDifficulty "creeping" upwards.
+; When used properly, it will cause the AI to slowly make spirals that cover
 ; (nearly) the entire maze. However, extra lines can "trick" it and
 ; cause it to jump more difficulty levels than wanted.
 ;
@@ -264,14 +276,14 @@ difficulty = {cur_difficulty(1.0)}
 ; (which is current_difficulty + 1 here), which prevents this from
 ; triggering multiple times before the AI can travel to new rooms.
 ;
-; We add 2 to maxDifficulty because adding 1 would cause us to overlap
-; prior progress, and we'd immediately add another 1 anyway.
-leon.adventure.maxDifficulty = if(\
-  difficulty > leon.adventure.maxDifficulty \
-  && {count.entities(Chest)} == 0,\
-  difficulty + 1.0,\
-  leon.adventure.maxDifficulty\
-)
+; if the room isn't clear or we've just woken up, we don't change maxDiff
+; otherwise, if we can survive the next difficulty, we increment by 2, if not, we decrement by 2
+; 
+{maxDiff.set({maxDiff.get} + if(\
+  difficulty <= {maxDiff.get} || {count.entities(Chest)} > 0 || dir == "",\
+  0.0,\
+  if({survivable(difficulty)}, 2.0, -2.0)\
+))}
 
 dir = if(\
   difficulty != 1.0 || dir == "",\
@@ -329,30 +341,26 @@ buy:
 adventure.buyMarketItem(sub(market_data, 5, 99))
 
 ; Turn our room direction into a target exit via lookup-table.
-; "U    L    R    D    " = "{dir_spaced(4)}"
-; "0918 0009 1809 0900"
-:const string exit_idx "0918 0009 1809 0900"
-{target.setPos(sub(exit_idx, index("{dir_spaced(4)}", dir, 0), 4) . ":")}
-; 
+; "XU    L    R    D    " = "X{dir_spaced(4)}"
+; " 0918 0009 1809 0900"
+:const string exit_idx " 0918 0009 1809 0900"
+{target.setPos(sub(exit_idx, index("X{dir_spaced(4)}", dir, 0), 4) . ":")}
 
-executesync(if(\
-  adventure.playerAttack() > 0 && {state.get},\
-  "{package}:movement",\
-  "{package}:xNOOPx"\
-))
+executesync("{package(movement)}")
 
-adventure.move({nextDir(dir)})
-waitframe()
+{path.set(dir)}
+executesync("{package(follow path)}")
 
-gotoif(start, adventure.playerAttack() > 0 && {state.get})
+gotoif(start, {state.get} && adventure.playerHealth() > 0)
 
 end:
 ; We reach the end 
-
-; Our state is controlled by the top of the script, so we can
-; only reach here if {state.get} == false or if arcade is closed.
 ; 
-; If our state == false, we won't change anything,
-; as we're already shut down but if arcade is closed,
-; we must ensure that we shut down
-{state.set(adventure.playerAttack() > 0 && {state.get})}
+; We're here if a filler action was used ({up}{down}{reinit}) or if we've shut down
+; {state.get} is false if the impulse was {kill} or {start} toggled us off
+; If the cause of the shut down was from an impulse, we don't need to change our state
+; However, if the player left adventure (exited arcade or entered another tab like lucky wheel),
+; then, we have to shut down, as we can no longer interact with adventure.
+; 
+; 
+{state.set({state.get} && adventure.playerHealth() > 0)}

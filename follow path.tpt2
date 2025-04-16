@@ -1,0 +1,84 @@
+:import adventure_lib
+:name {package(follow path)}
+
+:budget_cap 200
+
+; Follow the formed path
+; This extra script is required because moving is fps dependent
+; If adventure.move() is used, it can fail to move you if your fps is too high
+
+; It's used by building a path through {path.set()} and then it eats it up
+; Script stops if you're no longer in adventure,
+; This is detected by checking if you've got 0 health
+
+:local bool waitChest
+;
+:local vector curPos
+:local vector nextMove
+
+#nextTile adventure.entityType(adventure.playerPos() + nextMove)
+
+goto(start)
+
+bomb:
+adventure.placeBomb()
+goto(move)
+
+wait:
+adventure.wait()
+
+move:
+{path.set(sub({path.get}, 1, 2^18))}
+
+start:
+curPos = adventure.playerPos()
+nextMove = {nextDir(sub({path.get}, 0, 1))}
+waitChest = {nextTile} == "Chest"
+
+move2:
+waitframe()
+adventure.move(nextMove)
+; this is a no-op for invalid (0,0) moves
+
+; Jump table that works because index() returns -1 if it can't find the desired character
+; index("AB", "C", 0) = -1 because C is not in the string AB
+; 
+; wait - index("W B", sub(path, 0, 1), 0) is accessed if our next move is a bomb, wait or UDLR
+; If we're here with UDLR, we go to wait - -1 = wait + 1 = move:
+; If we're here with W, we go to wait - 0 = wait:
+; If we're here with B, we go to wait - 2 = bomb:
+; 
+; We go to move2 if we've failed to do an UDLR movement
+gotoif(\
+  if(\
+    contains("WB", sub({path.get}, 0, 1)) ||\
+    waitChest && {nextTile} == ""\
+    || x(curPos) != x(adventure.playerPos())\
+    || y(curPos) != y(adventure.playerPos()),\
+    wait - index("W B", sub({path.get}, 0, 1), 0),\
+    move2\
+  ),\
+  {state.get} && adventure.playerHealth() > 0 && {path.get} != ""\
+)
+; This is the old and more space efficient version of
+; Though this one is worse, it can be used to better explain the instruction above
+;gotoif(\
+;  if(\
+;    sub({path.get}, 0, 1) == "B",\
+;    bomb,\
+;    if(\
+;      sub({path.get}, 0, 1) == "W",\
+;      wait,\
+;      if(\
+;        waitChest && {nextTile} == ""\
+;        || x(curPos) != x(adventure.playerPos())\
+;        || y(curPos) != y(adventure.playerPos()),\
+;        move,\
+;        move2\
+;      )\
+;    )\
+;  ),\
+;  adventure.playerHealth() > 0 && {path.get} != ""\
+;)
+
+

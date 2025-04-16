@@ -1,16 +1,13 @@
 :import adventure_lib
-:name {package}:movement
+:name {package(movement)}
 
 :budget_cap 200
 
-:local bool waitChest
 :local bool cantPhase
 :local bool path_search
 ; 
 :local int stepCount
-:local int counter
 ; 
-:local string path
 
 :local string dir
 :local string idx
@@ -20,7 +17,6 @@
 :local string lootPositions
 ; 
 :local vector curPos
-:local vector nextMove
 
 
 ; There are 2 types of fields.
@@ -92,10 +88,10 @@ lootPositions = if(\
 ; otherwise, pop the processed position and look at
 ; the neighbouring 4 positions and
 ; add all non-wall positions to the queue
-queue = if(\
+queue = sub(queue, 6, 2^18) . if(\
   {getField(idx, target)} != {firstElementDir} || adventure.playerAttack() <= 0,\
-  sub(queue, 6, 99999),\
-  sub(queue, 6, 99999) . if(\
+  "",\
+  if(\
     adventure.isWall(curPos + vec(0.0, 1.0)) && cantPhase\
     || max(x(curPos), y(curPos)) >= 18.0\
     || x(curPos) < 1.0,\
@@ -143,7 +139,7 @@ targetPos = sub(lootPositions, 0, 4)
 curPos = {strToVec(targetPos)}
 ; set our curPos to our position
 
-lootPositions = sub(lootPositions, 5, 99999)
+lootPositions = sub(lootPositions, 5, 2^18)
 ; pop the previous loot position
 
 innerLoot_loop:
@@ -160,9 +156,10 @@ idx = {vecToString(curPos)}
 ; or if it has already been inserted in our target_positions
 ; 
 ; otherwise, insert a step to reach our loot position?
-#next_vector curPos - {nextDir({getField(idx, "")})}
+#previous_pos curPos - {nextDir({getField(idx, "")})}
+; 
 {target.setPos(if(\
-  {getField({vecToString({next_vector})}, "")} == "S" && \
+  {getField({vecToString({previous_pos})}, "")} == "S" && \
   not(contains({target.getPositions}, targetPos)),\
   targetPos . ":" . {target.getPositions},\
   if(\
@@ -176,7 +173,7 @@ idx = {vecToString(curPos)}
     ) . targetPos . ":" . sub(\
       {target.getPositions},\
       index({target.getPositions}, {getTPos(idx)}, 0),\
-      9999\
+      2^18\
     )\
   )\
 ))}
@@ -201,10 +198,11 @@ idx = {vecToString(curPos)}
 ; tile closer to the player
 ; 
 
-curPos -= {nextDir({getField(idx, "")})}
+curPos = {previous_pos}
 ; return to the innerLoop2 if we've not made
 ; our way back to the starting position if we have,
 ; move back to loop2 if there's more loot positions to add
+
 goto(if(\
   {getField({vecToString(curPos)}, "")} != "S",\
   innerLoot_loop,\
@@ -212,7 +210,7 @@ goto(if(\
 ))
 
 loop2:
-path = dir . path
+{path.set(dir . {path.get})}
 curPos -= {nextDir(dir)}
 idx = {vecToString(curPos)}
 
@@ -222,8 +220,7 @@ goto(if(dir == "S", start, loop2))
 
 #has_hammer adventure.hasItem("hammer")
 
-#curDirection sub(path, stepCount, 1)
-#insert(st,i,val) sub({st},0,{i}) . ({val}) . sub({st},{i},99999)
+#curDirection sub({path.get}, stepCount, 1)
 #escapeDirection if(\
   adventure.entityType(curPos + vec(0.0, 1.0)) == ""\
     && adventure.entityType(curPos + vec(0.0, 2.0)) == ""\
@@ -248,11 +245,12 @@ goto(if(dir == "S", start, loop2))
 )
 
 rock:
-path = {insert(\
-  path,\
-  stepCount,\
-  if(adventure.hasItem("eodArmor"), "BWWW", {escapeDirection})\
+{path.set(\
+  sub({path.get}, 0, stepCount)\
+  . if(adventure.hasItem("eodArmor"), "BWWW", {escapeDirection})\
+  . sub({path.get}, stepCount, 2 ^ 18)\
 )}
+
 stepCount += if(adventure.hasItem("eodArmor"), 4, 6)
 
 nextTile:
@@ -264,63 +262,22 @@ start:
 goto(if(\
   isopen("arcade") && {state.get},\
   if(\
-    len(path) <= stepCount,\
+    len({path.get}) <= stepCount,\
     start_following,\
     if({move_dir} != "Rock" || {has_hammer}, nextTile, rock)\
   ),\
   end\
 ))
 
-#nextTile adventure.entityType(adventure.playerPos() + nextMove)
-
-bomb:
-adventure.placeBomb()
-goto(move)
-
-wait:
-adventure.wait()
-
-move:
-path = sub(path, 1, 18 * 18 * 9)
-
 start_following:
-curPos = adventure.playerPos()
-nextMove = {nextDir(sub(path, 0, 1))}
-waitChest = {nextTile} == "Chest"
-counter = 0
+executesync("{package(follow path)}")
 
-move2:
-waitframe()
-adventure.move(nextMove)
-; This is a no-op for invalid (0,0) moves
-
-counter += 1
-
-gotoif(\
-  if(\
-    sub(path, 0, 1) == "B",\
-    bomb,\
-    if(\
-      sub(path, 0, 1) == "W",\
-      wait,\
-      if(\
-        waitChest && {nextTile} == ""\
-        || x(curPos) != x(adventure.playerPos())\
-        || y(curPos) != y(adventure.playerPos())\
-        || counter >= 15,\
-        move,\
-        move2\
-      )\
-    )\
-  ),\
-  {state.get} && isopen("arcade") && path != ""\
-)
-
-{target.setPos(sub({target.getPositions}, 5, 9999))}
+{target.setPos(sub({target.getPositions}, 5, 2^18))}
 
 end:
 path_search = true
 ; Set to true so we can reuse the top of the script
 ; 
 ; keep looping until we no longer have any target positions
-gotoif(0, isopen("arcade") && {state.get} && {target.getPositions} != "")
+; init will stop() us if the user leaves the bounds of our execution
+gotoif(0, {target.getPositions} != "" && {state.get} && adventure.playerHealth() > 0)
